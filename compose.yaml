@@ -1,0 +1,41 @@
+services:
+
+  mysql:
+    image: mysql:8.0
+    container_name: survey-mysql
+    environment:
+      MYSQL_DATABASE: survey_db
+      MYSQL_ROOT_PASSWORD: wxrshishuaige1@
+    ports:
+      - "3306:3306"
+    volumes:
+      # 数据持久化，容器重启数据不丢失
+      - mysql_data:/var/lib/mysql
+      # 自动初始化建表，把 schema.sql 放到这个目录
+      - ./schema.sql:/docker-entrypoint-initdb.d/schema.sql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-pwxrshishuaige1@"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build: .
+    container_name: survey-app
+    ports:
+      - "8080:8080"
+    environment:
+      # 覆盖 application.properties 里的数据库地址
+      # 容器内用服务名 mysql 访问，不用 localhost
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/survey_db?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: wxrshishuaige1@
+      SPRING_DOCKER_COMPOSE_ENABLED: "false"
+    volumes:
+      - ./uploads:/app/uploads
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+volumes:
+  mysql_data:
