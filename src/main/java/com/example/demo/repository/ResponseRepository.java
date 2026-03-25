@@ -81,4 +81,11 @@ public class ResponseRepository {
                 ROW_MAPPER, surveyId
         );
     }
+    public List<Response> findBySurveyAndDept(Integer surveyId, Integer departmentId) {
+        return jdbc.query(
+                "SELECT id, survey_id, department_id, emp_no, emp_name, dept_name, submitted_at " +
+                        "FROM responses WHERE survey_id = ? AND department_id = ? ORDER BY submitted_at DESC",
+                ROW_MAPPER, surveyId, departmentId
+        );
+    }
 }
