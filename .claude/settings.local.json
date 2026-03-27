@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls src/main/java/com/example/demo/Service/impl/*.java)",
+      "Bash(xargs -I {} basename {})",
+      "Read(//c/Users/Administrator/survey-frontend/**)",
+      "Bash(dir \"C:\\\\Users\\\\Administrator\\\\survey-frontend\")"
+    ]
+  }
+}
