@@ -70,7 +70,7 @@ public class ExportServiceImpl implements ExportService {
 
             // 表头
             List<String> headers = new ArrayList<>(
-                    List.of("序号", "姓名", "工号", "所属党组织", "提交时间"));
+                    List.of("序号", "所属党组织", "提交时间"));
             exportQs.forEach(q -> headers.add("第" + q.getSortOrder() + "题"));
 
             Row headerRow = sheet.createRow(0);
@@ -78,7 +78,7 @@ public class ExportServiceImpl implements ExportService {
                 Cell cell = headerRow.createCell(i);
                 cell.setCellValue(headers.get(i));
                 cell.setCellStyle(headerStyle);
-                sheet.setColumnWidth(i, i < 5 ? 4000 : 8000);
+                sheet.setColumnWidth(i, i < 3 ? 4000 : 8000);
             }
 
             // 数据行
@@ -96,8 +96,6 @@ public class ExportServiceImpl implements ExportService {
                 Row row = sheet.createRow(rowNum++);
                 int col = 0;
                 setCell(row, col++, String.valueOf(rowNum - 1), dataStyle);
-                setCell(row, col++, resp.getEmpName(),  dataStyle);
-                setCell(row, col++, resp.getEmpNo(),    dataStyle);
                 setCell(row, col++, resp.getDeptName(), dataStyle);
                 setCell(row, col++,
                         resp.getSubmittedAt() != null
@@ -109,7 +107,7 @@ public class ExportServiceImpl implements ExportService {
                 }
             }
 
-            sheet.createFreezePane(5, 1);
+            sheet.createFreezePane(3, 1);
             writeResponse(response, wb, filename);
         } catch (IOException e) {
             throw new BusinessException(500, "导出失败，请稍后重试");

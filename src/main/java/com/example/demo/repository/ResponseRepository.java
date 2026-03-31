@@ -26,8 +26,6 @@ public class ResponseRepository {
         r.setId(rs.getLong("id"));
         r.setSurveyId(rs.getInt("survey_id"));
         r.setDepartmentId(rs.getInt("department_id"));
-        r.setEmpNo(rs.getString("emp_no"));
-        r.setEmpName(rs.getString("emp_name"));
         r.setDeptName(rs.getString("dept_name"));
         r.setSubmittedAt(rs.getTimestamp("submitted_at").toLocalDateTime());
         return r;
@@ -58,10 +56,34 @@ public class ResponseRepository {
         return Objects.requireNonNull(keyHolder.getKey()).longValue();
     }
 
-    public boolean existsByEmpNo(Integer surveyId, String empNo) {
+    /**
+     * 插入答卷主表（匿名模式），返回自增主键
+     */
+    public Long insertAnonymous(Integer surveyId, Integer departmentId,
+                                String deptName, String ip, String fingerprint,
+                                LocalDateTime submittedAt) {
+        KeyHolder keyHolder = new GeneratedKeyHolder();
+        jdbc.update(conn -> {
+            PreparedStatement ps = conn.prepareStatement(
+                    "INSERT INTO responses (survey_id, department_id, dept_name, ip, device_fingerprint, submitted_at) " +
+                            "VALUES (?, ?, ?, ?, ?, ?)",
+                    Statement.RETURN_GENERATED_KEYS
+            );
+            ps.setInt(1, surveyId);
+            ps.setInt(2, departmentId);
+            ps.setString(3, deptName);
+            ps.setString(4, ip);
+            ps.setString(5, fingerprint);
+            ps.setTimestamp(6, Timestamp.valueOf(submittedAt));
+            return ps;
+        }, keyHolder);
+        return Objects.requireNonNull(keyHolder.getKey()).longValue();
+    }
+
+    public boolean existsByFingerprint(Integer surveyId, String fingerprint) {
         Integer count = jdbc.queryForObject(
-                "SELECT COUNT(*) FROM responses WHERE survey_id = ? AND emp_no = ?",
-                Integer.class, surveyId, empNo
+                "SELECT COUNT(*) FROM responses WHERE survey_id = ? AND device_fingerprint = ?",
+                Integer.class, surveyId, fingerprint
         );
         return count != null && count > 0;
     }
@@ -76,14 +98,14 @@ public class ResponseRepository {
 
     public List<Response> findBySurveyId(Integer surveyId) {
         return jdbc.query(
-                "SELECT id, survey_id, department_id, emp_no, emp_name, dept_name, submitted_at " +
+                "SELECT id, survey_id, department_id, dept_name, submitted_at " +
                         "FROM responses WHERE survey_id = ? ORDER BY submitted_at DESC",
                 ROW_MAPPER, surveyId
         );
     }
     public List<Response> findBySurveyAndDept(Integer surveyId, Integer departmentId) {
         return jdbc.query(
-                "SELECT id, survey_id, department_id, emp_no, emp_name, dept_name, submitted_at " +
+                "SELECT id, survey_id, department_id, dept_name, submitted_at " +
                         "FROM responses WHERE survey_id = ? AND department_id = ? ORDER BY submitted_at DESC",
                 ROW_MAPPER, surveyId, departmentId
         );

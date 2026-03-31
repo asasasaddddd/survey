@@ -9,8 +9,6 @@ import java.util.Map;
 public interface ResponseService {
 
     void submit(Integer surveyId,
-                String empNo,
-                String name,
                 Integer departmentId,
                 List<AnswerItem> answers,
                 Map<String, MultipartFile> files);

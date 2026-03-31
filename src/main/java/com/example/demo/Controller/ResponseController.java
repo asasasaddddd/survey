@@ -25,12 +25,10 @@ public class ResponseController {
     private static final ObjectMapper objectMapper = new ObjectMapper();
     /**
      * POST /api/surveys/{surveyId}/responses
-     * 提交答卷，Content-Type: multipart/form-data
+     * 提交答卷（匿名模式），Content-Type: multipart/form-data
      *
      * 表单字段：
-     *   empNo        工号
-     *   name         姓名
-     *   departmentId 部门 ID
+     *   departmentId 部门 ID（从 URL 参数获取）
      *   answers      JSON 字符串 [{"questionId":1,"optionId":5}, ...]
      *   file_{qId}   附件文件（可选）
      */
@@ -39,8 +37,6 @@ public class ResponseController {
                                HttpServletRequest request) {
 
         // ── 解析表单字段 ──────────────────────────────────────────────────
-        String empNo       = require(request, "empNo",        "工号不能为空");
-        String name        = require(request, "name",         "姓名不能为空");
         String deptIdStr   = require(request, "departmentId", "请选择所属党组织");
         String answersJson = require(request, "answers",      "answers 不能为空");
 
@@ -69,8 +65,7 @@ public class ResponseController {
             });
         }
 
-        responseService.submit(surveyId, empNo.trim(), name.trim(),
-                departmentId, answers, fileMap);
+        responseService.submit(surveyId, departmentId, answers, fileMap);
 
         return Result.ok("提交成功，感谢您的参与！");
     }

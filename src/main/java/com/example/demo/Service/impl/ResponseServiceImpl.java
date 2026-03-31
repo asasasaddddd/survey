@@ -42,8 +42,6 @@ public class ResponseServiceImpl implements ResponseService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void submit(Integer surveyId,
-                       String empNo,
-                       String name,
                        Integer departmentId,
                        List<AnswerItem> answers,
                        Map<String, MultipartFile> files) {
@@ -64,17 +62,19 @@ public class ResponseServiceImpl implements ResponseService {
             throw BusinessException.badRequest("所选党组织不存在");
         }
 
-        // ── 3. 防重复提交 ─────────────────────────────────────────────────
-        if (responseRepository.existsByEmpNo(surveyId, empNo)) {
+        // ── 3. 防重复提交（设备指纹） ─────────────────────────────────────
+        String fingerprint = generateDeviceFingerprint();
+        if (responseRepository.existsByFingerprint(surveyId, fingerprint)) {
             throw BusinessException.conflict("您已提交过本次问卷，请勿重复填写");
         }
 
         // ── 4. 必答题校验 ─────────────────────────────────────────────────
         validateRequiredAnswers(surveyId, answers);
 
-        // ── 5. 写入答卷主表 ───────────────────────────────────────────────
-        Long responseId = responseRepository.insert(
-                surveyId, departmentId, empNo, name, dept.getName(), getClientIp(), now
+        // ── 5. 写入答卷主表（匿名模式：empNo/name 为 null） ──────────────
+        String clientIp = getClientIp();
+        Long responseId = responseRepository.insertAnonymous(
+                surveyId, departmentId, dept.getName(), clientIp, fingerprint, now
         );
 
         // ── 6. 写入答题明细 ───────────────────────────────────────────────
@@ -111,10 +111,10 @@ public class ResponseServiceImpl implements ResponseService {
             });
         }
 
-        // ── 8. 自动录入花名册（INSERT IGNORE，已存在则跳过） ────────────
-        employeeRepository.insertIgnore(empNo, name, departmentId);
+        // ── 8. 自动录入花名册（匿名模式下跳过） ────────────────────────
+        // employeeRepository.insertIgnore(empNo, name, departmentId);
 
-        log.info("[submit] surveyId={} empNo={} responseId={}", surveyId, empNo, responseId);
+        log.info("[submit] surveyId={} deptId={} responseId={}", surveyId, departmentId, responseId);
     }
 
     @Override
@@ -141,6 +141,20 @@ public class ResponseServiceImpl implements ResponseService {
     }
 
     // ── 私有辅助方法 ──────────────────────────────────────────────────────
+
+    private String generateDeviceFingerprint() {
+        try {
+            HttpServletRequest req = ((ServletRequestAttributes)
+                    Objects.requireNonNull(RequestContextHolder.getRequestAttributes()))
+                    .getRequest();
+            String ip = getClientIp();
+            String ua = req.getHeader("User-Agent");
+            String raw = ip + "|" + (ua != null ? ua : "");
+            return String.valueOf(raw.hashCode());
+        } catch (Exception e) {
+            return String.valueOf(System.currentTimeMillis());
+        }
+    }
 
     private void validateRequiredAnswers(Integer surveyId, List<AnswerItem> answers) {
         List<Question> required = questionRepository.findRequiredBySurveyId(surveyId);
