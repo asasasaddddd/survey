@@ -37,5 +37,16 @@ public class ExportController {
                             HttpServletResponse response) {
         exportService.exportStats(surveyId, deptId, response);
     }
+
+    /**
+     * GET /api/surveys/{surveyId}/export/responses-with-files?deptId=1
+     * 导出答卷明细和附件为 ZIP，不传 deptId 则导出全部
+     */
+    @GetMapping("/surveys/{surveyId}/export/responses-with-files")
+    public void exportResponsesWithFiles(@PathVariable Integer surveyId,
+                                         @RequestParam(required = false) Integer deptId,
+                                         HttpServletResponse response) {
+        exportService.exportResponsesWithFiles(surveyId, deptId, response);
+    }
 }
 

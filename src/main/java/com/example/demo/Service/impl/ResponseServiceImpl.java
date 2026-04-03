@@ -93,21 +93,28 @@ public class ResponseServiceImpl implements ResponseService {
 
         // ── 7. 处理附件文件 ───────────────────────────────────────────────
         // fieldName 约定：file_{questionId}
-        if (files != null) {
+        if (files != null && !files.isEmpty()) {
+            log.info("[submit] processing {} files", files.size());
             files.forEach((fieldName, file) -> {
                 if (file == null || file.isEmpty()) return;
                 Integer questionId = parseQuestionId(fieldName);
                 if (questionId == null) return;
 
-                String storagePath = fileUtil.save(file);
-                fileRepository.insert(
-                        responseId, questionId,
-                        file.getOriginalFilename(),
-                        storagePath,
-                        file.getContentType(),
-                        file.getSize(),
-                        now
-                );
+                try {
+                    String storagePath = fileUtil.save(file);
+                    fileRepository.insert(
+                            responseId, questionId,
+                            file.getOriginalFilename(),
+                            storagePath,
+                            file.getContentType(),
+                            file.getSize(),
+                            now
+                    );
+                    log.info("[submit] file saved: {} -> {}", file.getOriginalFilename(), storagePath);
+                } catch (Exception e) {
+                    log.error("[submit] file save failed: {}", file.getOriginalFilename(), e);
+                    throw e;
+                }
             });
         }
 

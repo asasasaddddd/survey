@@ -5,10 +5,7 @@ import com.example.demo.DTO.SurveyResponse;
 import com.example.demo.Service.SurveyService;
 import com.example.demo.entity.Department;
 import lombok.RequiredArgsConstructor;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
@@ -30,7 +27,8 @@ public class SurveyController {
      * 获取问卷详情（含题目和选项，按 section 分组）
      */
     @GetMapping("/surveys/{surveyId}")
-    public Result<SurveyResponse> getSurvey(@PathVariable Integer surveyId) {
-        return Result.ok(surveyService.getSurveyDetail(surveyId));
+    public Result<SurveyResponse> getSurvey(@PathVariable Integer surveyId,
+                                            @RequestParam(required = false) Integer deptId) {
+        return Result.ok(surveyService.getSurveyDetail(surveyId, deptId));
     }
 }

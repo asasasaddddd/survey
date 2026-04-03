@@ -13,4 +13,9 @@ public interface ExportService {
      * 导出某问卷各题选项统计为 Excel
      */
     void exportStats(Integer surveyId, Integer departmentId, HttpServletResponse response);
+
+    /**
+     * 导出答卷明细和附件文件为 ZIP
+     */
+    void exportResponsesWithFiles(Integer surveyId, Integer deptId, HttpServletResponse response);
 }

@@ -10,6 +10,7 @@ public class SurveyResponse {
     private Integer id;
     private String title;
     private String description;
+    private String departmentName;
     private List<SectionDTO> sections;
 
     @Data

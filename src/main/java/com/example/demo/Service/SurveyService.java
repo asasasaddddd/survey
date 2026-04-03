@@ -9,5 +9,5 @@ public interface SurveyService {
 
     List<Department> listDepartments();
 
-    SurveyResponse getSurveyDetail(Integer surveyId);
+    SurveyResponse getSurveyDetail(Integer surveyId, Integer deptId);
 }

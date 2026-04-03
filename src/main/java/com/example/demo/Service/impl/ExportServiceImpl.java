@@ -8,14 +8,22 @@ import jakarta.servlet.http.HttpServletResponse;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.ss.util.CellRangeAddress;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.stream.Collectors;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 
 @Service
 public class ExportServiceImpl implements ExportService {
@@ -25,16 +33,23 @@ public class ExportServiceImpl implements ExportService {
     private final ResponseRepository       responseRepository;
     private final ResponseAnswerRepository answerRepository;
     private final DepartmentRepository departmentRepository;
+    private final ResponseFileRepository fileRepository;
+
+    @Value("${file.upload-dir:/opt/survey/uploads}")
+    private String uploadDir;
 
     public ExportServiceImpl(SurveyRepository surveyRepository,
                              QuestionRepository questionRepository,
                              ResponseRepository responseRepository,
-                             ResponseAnswerRepository answerRepository, DepartmentRepository departmentRepository) {
+                             ResponseAnswerRepository answerRepository,
+                             DepartmentRepository departmentRepository,
+                             ResponseFileRepository fileRepository) {
         this.surveyRepository  = surveyRepository;
         this.questionRepository = questionRepository;
         this.responseRepository = responseRepository;
         this.answerRepository   = answerRepository;
         this.departmentRepository = departmentRepository;
+        this.fileRepository = fileRepository;
     }
 
     // ── 导出原始答卷明细 ──────────────────────────────────────────────────
@@ -323,5 +338,118 @@ public class ExportServiceImpl implements ExportService {
         Department d = departmentRepository.findById(deptId);
         if (d == null) throw BusinessException.notFound("党组织不存在，deptId=" + deptId);
         return d;
+    }
+
+    // ── 导出答卷明细和附件为 ZIP ──────────────────────────────────────────
+
+    @Override
+    public void exportResponsesWithFiles(Integer surveyId, Integer deptId, HttpServletResponse response) {
+        Survey survey = getSurveyOrThrow(surveyId);
+        Department dept = deptId != null ? getDeptOrThrow(deptId) : null;
+
+        String filename = "答卷明细_" + survey.getTitle()
+                + (dept != null ? "_" + dept.getName() : "") + ".zip";
+
+        File tempExcel = null;
+        try {
+            // 1. 生成 Excel 到临时文件
+            tempExcel = File.createTempFile("survey_", ".xlsx");
+            try (Workbook wb = createResponsesWorkbook(surveyId, deptId);
+                 FileOutputStream fos = new FileOutputStream(tempExcel)) {
+                wb.write(fos);
+            }
+
+            // 2. 查询附件
+            List<ResponseFile> files = deptId != null
+                    ? fileRepository.findBySurveyIdAndDeptId(surveyId, deptId)
+                    : fileRepository.findBySurveyId(surveyId);
+
+            // 3. 创建 ZIP
+            String encoded = URLEncoder.encode(filename, StandardCharsets.UTF_8).replace("+", "%20");
+            response.setContentType("application/zip");
+            response.setHeader("Content-Disposition", "attachment; filename*=UTF-8''" + encoded);
+            response.setHeader("Access-Control-Expose-Headers", "Content-Disposition");
+
+            try (ZipOutputStream zos = new ZipOutputStream(response.getOutputStream())) {
+                // 添加 Excel
+                zos.putNextEntry(new ZipEntry("答卷明细.xlsx"));
+                Files.copy(tempExcel.toPath(), zos);
+                zos.closeEntry();
+
+                // 添加附件
+                for (ResponseFile file : files) {
+                    Path filePath = Paths.get(uploadDir, file.getStoragePath());
+                    if (Files.exists(filePath)) {
+                        String entryName = "附件/" + file.getResponseId() + "_" + file.getOriginalName();
+                        zos.putNextEntry(new ZipEntry(entryName));
+                        Files.copy(filePath, zos);
+                        zos.closeEntry();
+                    }
+                }
+            }
+        } catch (IOException e) {
+            throw new BusinessException(500, "导出失败，请稍后重试");
+        } finally {
+            if (tempExcel != null) tempExcel.delete();
+        }
+    }
+
+    private Workbook createResponsesWorkbook(Integer surveyId, Integer deptId) {
+        Survey survey = getSurveyOrThrow(surveyId);
+        Department dept = deptId != null ? getDeptOrThrow(deptId) : null;
+        List<Question> questions = questionRepository.findBySurveyId(surveyId);
+
+        List<Response> responses = responseRepository.findBySurveyId(surveyId)
+                .stream()
+                .filter(r -> deptId == null || deptId.equals(r.getDepartmentId()))
+                .collect(Collectors.toList());
+
+        String sheetName = dept != null ? dept.getName() : "全部";
+
+        Workbook wb = new XSSFWorkbook();
+        Sheet sheet = wb.createSheet(sheetName);
+
+        CellStyle headerStyle = createHeaderStyle(wb);
+        CellStyle dataStyle = createDataStyle(wb);
+        CellStyle wrapStyle = createWrapStyle(wb);
+
+        List<Question> exportQs = questions.stream()
+                .filter(q -> !"file".equals(q.getType()))
+                .collect(Collectors.toList());
+
+        List<String> headers = new ArrayList<>(List.of("序号", "所属党组织", "提交时间"));
+        exportQs.forEach(q -> headers.add("第" + q.getSortOrder() + "题"));
+
+        Row headerRow = sheet.createRow(0);
+        for (int i = 0; i < headers.size(); i++) {
+            Cell cell = headerRow.createCell(i);
+            cell.setCellValue(headers.get(i));
+            cell.setCellStyle(headerStyle);
+            sheet.setColumnWidth(i, i < 3 ? 4000 : 8000);
+        }
+
+        DateTimeFormatter fmt = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+        int rowNum = 1;
+        for (Response resp : responses) {
+            List<ResponseAnswer> answers = answerRepository.findByResponseId(resp.getId());
+            Map<Integer, String> answerMap = answers.stream()
+                    .collect(Collectors.toMap(
+                            ResponseAnswer::getQuestionId,
+                            a -> a.getAnswerText() != null ? a.getAnswerText() : "",
+                            (a, b) -> a
+                    ));
+
+            Row row = sheet.createRow(rowNum++);
+            int col = 0;
+            setCell(row, col++, String.valueOf(rowNum - 1), dataStyle);
+            setCell(row, col++, resp.getDeptName(), dataStyle);
+            setCell(row, col++, resp.getSubmittedAt() != null ? resp.getSubmittedAt().format(fmt) : "", dataStyle);
+            for (Question q : exportQs) {
+                setCell(row, col++, answerMap.getOrDefault(q.getId(), ""), wrapStyle);
+            }
+        }
+
+        sheet.createFreezePane(3, 1);
+        return wb;
     }
 }

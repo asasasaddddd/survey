@@ -36,7 +36,7 @@ public class SurveyServiceImpl implements SurveyService {
     }
 
     @Override
-    public SurveyResponse getSurveyDetail(Integer surveyId) {
+    public SurveyResponse getSurveyDetail(Integer surveyId, Integer deptId) {
         // 1. 查询并校验问卷
         Survey survey = surveyRepository.findById(surveyId);
         if (survey == null) {
@@ -89,7 +89,16 @@ public class SurveyServiceImpl implements SurveyService {
             sectionMap.computeIfAbsent(q.getSection(), k -> new ArrayList<>()).add(qDto);
         }
 
-        // 5. 组装返回体
+        // 5. 查询部门名称
+        String departmentName = null;
+        if (deptId != null) {
+            Department dept = departmentRepository.findById(deptId);
+            if (dept != null) {
+                departmentName = dept.getName();
+            }
+        }
+
+        // 6. 组装返回体
         List<SurveyResponse.SectionDTO> sections = sectionMap.entrySet().stream()
                 .map(e -> {
                     SurveyResponse.SectionDTO sec = new SurveyResponse.SectionDTO();
@@ -102,6 +111,7 @@ public class SurveyServiceImpl implements SurveyService {
         resp.setId(survey.getId());
         resp.setTitle(survey.getTitle());
         resp.setDescription(survey.getDescription());
+        resp.setDepartmentName(departmentName);
         resp.setSections(sections);
         return resp;
     }
